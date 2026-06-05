@@ -1,0 +1,13 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="kg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F97316"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" rx="40" fill="url(#kg)"/>
+  <circle cx="300" cy="320" r="120" fill="#fff" opacity="0.15"/>
+  <circle cx="900" cy="520" r="130" fill="#fff" opacity="0.12"/>
+  <path d="M420 720C380 620 320 520 320 420C320 350 380 300 450 300C520 300 530 360 530 420C530 500 490 560 430 620C540 650 600 720 660 760C700 790 760 770 790 730C830 680 820 620 780 590" stroke="#fff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="50%" y="85%" dominant-baseline="middle" text-anchor="middle" fill="#fff" font-family="Inter, sans-serif" font-size="90" font-weight="700">Karate</text>
+</svg>

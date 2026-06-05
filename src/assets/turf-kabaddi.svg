@@ -1,0 +1,14 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="kg2" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" rx="40" fill="url(#kg2)"/>
+  <circle cx="280" cy="320" r="140" fill="#fff" opacity="0.15"/>
+  <circle cx="870" cy="520" r="120" fill="#fff" opacity="0.12"/>
+  <path d="M440 620C500 540 560 500 640 440C700 400 740 340 820 320" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M380 520C420 460 460 440 520 410C620 360 700 320 820 330" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="50%" y="85%" dominant-baseline="middle" text-anchor="middle" fill="#fff" font-family="Inter, sans-serif" font-size="90" font-weight="700">Kabaddi</text>
+</svg>
