@@ -50,64 +50,94 @@ export function BookingForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("=== FORM SUBMISSION STARTED ===");
     console.log("Form submitted with data:", formData);
     
     // Check if all required fields are filled
     if (!formData.name || !formData.phone || !formData.email || !formData.game || !formData.date || !formData.timeSlot || !formData.players) {
       console.error("Missing required fields");
+      console.log("Missing fields:", {
+        name: !formData.name,
+        phone: !formData.phone,
+        email: !formData.email,
+        game: !formData.game,
+        date: !formData.date,
+        timeSlot: !formData.timeSlot,
+        players: !formData.players
+      });
       alert("Please fill in all required fields");
       return;
     }
 
+    console.log("All required fields present");
+
     // Validate email
     if (!formData.email.includes("@")) {
+      console.error("Invalid email");
       alert("Please enter a valid email address");
       return;
     }
 
+    console.log("Email validated");
+
     // Check if time slot is locked
-    const datetime = new Date(`${formData.date}T${formData.timeSlot.split('-')[0]}:00:00`).toISOString();
-    if (isTimeSlotLocked(datetime)) {
-      alert("This time slot is already booked. Please select a different time.");
+    try {
+      const timeSlotParts = formData.timeSlot.split('-');
+      const hour = parseInt(timeSlotParts[0]);
+      const dateObj = new Date(formData.date);
+      
+      if (isNaN(dateObj.getTime())) {
+        console.error("Invalid date:", formData.date);
+        alert("Please select a valid date");
+        return;
+      }
+      
+      if (isNaN(hour) || hour < 0 || hour > 23) {
+        console.error("Invalid hour:", hour);
+        alert("Please select a valid time slot");
+        return;
+      }
+      
+      dateObj.setHours(hour, 0, 0, 0);
+      const datetime = dateObj.toISOString();
+      console.log("Checking if time slot is locked:", datetime);
+      
+      if (await isTimeSlotLocked(datetime)) {
+        console.error("Time slot is locked");
+        alert("This time slot is already booked. Please select a different time.");
+        return;
+      }
+
+      console.log("Time slot is available");
+    } catch (error) {
+      console.error("Error parsing date/time:", error);
+      alert("Error processing date and time. Please try again.");
       return;
     }
 
     // Set loading state
-    const submitButton = e.currentTarget.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const submitButton = e.currentTarget?.querySelector('button[type="submit"]') as HTMLButtonElement;
+    console.log("Submit button found:", submitButton);
     if (submitButton) {
       submitButton.disabled = true;
       submitButton.textContent = "Processing...";
+      console.log("Submit button disabled and text changed");
     }
 
+    let booking: any = null;
+    
     try {
-      // Call API route
-      console.log("Submitting booking to API...");
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      console.log("API Response status:", response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("API Error:", errorData);
-        // Don't return early - continue with localStorage fallback
-      } else {
-        const result = await response.json();
-        console.log("API Success:", result);
-      }
-
+      console.log("=== SAVING BOOKING ===");
+      
       // Record booking time
       const currentTime = new Date().toLocaleString();
       setBookingTime(currentTime);
+      console.log("Booking time set:", currentTime);
 
-      // Calculate batch info for local store
+      // Calculate batch info
       const batch = getBatch(formData.timeSlot);
       const displayBatch = batch.charAt(0).toUpperCase() + batch.slice(1);
+      console.log("Batch calculated:", batch, displayBatch);
       
       // Ensure batch is a valid TimeBatch value
       const validBatch: TimeBatch = (
@@ -115,37 +145,42 @@ export function BookingForm() {
           ? batch
           : "morning"
       );
+      console.log("Valid batch:", validBatch);
       
-      // Always save to localStorage as fallback/primary storage
-      if (typeof window !== "undefined") {
-        try {
-          console.log("Saving to local store...");
-          const booking = addBooking({
-            name: formData.name,
-            phone: formData.phone,
-            email: formData.email,
-            turf: formData.game,
-            sport: formData.game,
-            datetime: new Date(`${formData.date}T${formData.timeSlot.split('-')[0]}:00:00`).toISOString(),
-            players: parseInt(formData.players),
-            price: 500,
-            batch: validBatch,
-            preferredLocation: "Chennimalai",
-            dealNotes: `Time slot: ${formData.timeSlot}`,
-          });
-          console.log("Booking saved to local store successfully:", booking);
-          
-          // Force a storage event to notify other tabs
-          window.dispatchEvent(new StorageEvent('storage', {
-            key: 'turfpro:store:v1',
-            newValue: localStorage.getItem('turfpro:store:v1'),
-            oldValue: localStorage.getItem('turfpro:store:v1'),
-            url: window.location.href
-          }));
-        } catch (storeError) {
-          console.error("Error saving to local store:", storeError);
+      // Submit to API
+      console.log("Submitting booking to API...");
+      const apiResponse = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          email: formData.email,
+          game: formData.game,
+          date: formData.date,
+          timeSlot: formData.timeSlot,
+          players: formData.players,
+        }),
+      });
+
+      console.log("API Response status:", apiResponse.status);
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json();
+        console.error("API Error:", errorData);
+        alert(`Error: ${errorData.error || 'Failed to submit booking'}`);
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = "Book Now";
         }
+        return;
       }
+
+      const apiResult = await apiResponse.json();
+      console.log("API Success:", apiResult);
+      booking = apiResult.booking;
 
       // Send WhatsApp message
       const message = `Hi Sports Pitch, I would like to book a turf.
@@ -158,7 +193,7 @@ Time: ${formData.timeSlot}
 Batch: ${displayBatch}
 Players: ${formData.players}
 
-Booking ID: ${result.booking?.id || 'Pending'}`;
+Booking ID: ${booking?.id || 'Pending'}`;
 
       console.log("WhatsApp message:", message);
       

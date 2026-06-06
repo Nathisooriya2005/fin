@@ -22,11 +22,16 @@
     const STORE_KEY = "turfpro:store:v1";
     const ADMIN_CREDS = { id: "admin", password: "admin123" };
 
-    function getBookings() {
-      const data = localStorage.getItem(STORE_KEY);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return parsed.bookings || [];
+    async function getBookings() {
+      try {
+        const response = await fetch('/api/bookings');
+        const data = await response.json();
+        console.log('API Response:', data);
+        return Array.isArray(data.bookings) ? data.bookings : [];
+      } catch (error) {
+        console.error('Error fetching bookings:', error);
+        return [];
+      }
     }
 
     function adminLogin(id, password) {
@@ -45,48 +50,38 @@
       return localStorage.getItem(ADMIN_KEY) === "1";
     }
 
-    function updateBookingStatus(bookingId, newStatus) {
-      const data = localStorage.getItem(STORE_KEY);
-      if (!data) return;
-      const parsed = JSON.parse(data);
-      const booking = parsed.bookings.find(b => b.id === bookingId);
-      const updated = parsed.bookings.map(b => 
-        b.id === bookingId ? { ...b, status: newStatus } : b
-      );
-      parsed.bookings = updated;
+    async function updateBookingStatus(bookingId, newStatus) {
+      console.log('Updating booking status:', bookingId, newStatus);
+      const response = await fetch('/api/bookings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: bookingId, status: newStatus })
+      });
+      const data = await response.json();
+      console.log('API response:', data);
       
-      // Lock time slot if booked
-      if (newStatus === 'booked' && booking) {
-        if (!parsed.lockedTimeSlots) {
-          parsed.lockedTimeSlots = [];
+      if (data.success) {
+        const booking = data.booking;
+        console.log('Booking updated successfully:', booking);
+        
+        // Send WhatsApp message if booked
+        if (newStatus === 'booked' && booking) {
+          const message = encodeURIComponent("Your sports is booked successfully!!!");
+          window.open(`https://wa.me/${booking.phone}?text=${message}`, '_blank');
         }
-        if (!parsed.lockedTimeSlots.includes(booking.datetime)) {
-          parsed.lockedTimeSlots.push(booking.datetime);
+        
+        // Send WhatsApp message if rejected
+        if (newStatus === 'rejected' && booking) {
+          const message = encodeURIComponent("Your booking has been rejected. Please contact us for more details.");
+          window.open(`https://wa.me/${booking.phone}?text=${message}`, '_blank');
         }
+        
+        console.log('Calling render() to update dashboard');
+        await render();
+        console.log('Render completed');
+      } else {
+        console.error('Failed to update booking status:', data);
       }
-      
-      // Unlock time slot if rejected
-      if (newStatus === 'rejected' && booking) {
-        if (parsed.lockedTimeSlots) {
-          parsed.lockedTimeSlots = parsed.lockedTimeSlots.filter(t => t !== booking.datetime);
-        }
-      }
-      
-      localStorage.setItem(STORE_KEY, JSON.stringify(parsed));
-      
-      // Send WhatsApp message if booked
-      if (newStatus === 'booked' && booking) {
-        const message = encodeURIComponent("Your sports is booked successfully!!!");
-        window.open(`https://wa.me/${booking.phone}?text=${message}`, '_blank');
-      }
-      
-      // Send WhatsApp message if rejected
-      if (newStatus === 'rejected' && booking) {
-        const message = encodeURIComponent("Your booking has been rejected. Please contact us for more details.");
-        window.open(`https://wa.me/${booking.phone}?text=${message}`, '_blank');
-      }
-      
-      render();
     }
 
     function downloadCSV(filename, content) {
@@ -122,82 +117,36 @@
     let searchTerm = '';
     let isPaymentFormActive = false;
 
-    function render() {
-      const app = document.getElementById('app');
-      
-      // Don't re-render if user is interacting with payment form
-      if (currentView === 'payments' && isPaymentFormActive) {
-        return; // Skip render while interacting
-      }
-      
-      // Save input values before render
-      let savedAdminId = '';
-      let savedAdminPassword = '';
-      let savedPaymentBookingId = '';
-      let savedPaymentName = '';
-      let savedPaymentPhone = '';
-      let savedPaymentSport = '';
-      let savedPaymentTurf = '';
-      let savedPaymentDate = '';
-      let savedPaymentTime = '';
-      let savedPaymentPlayers = '';
-      let savedPaymentAmount = '';
-      let savedPaymentStatus = '';
-      
-      if (currentView === 'login') {
-        const adminIdInput = document.getElementById('adminId');
-        const adminPasswordInput = document.getElementById('adminPassword');
-        if (adminIdInput) savedAdminId = adminIdInput.value;
-        if (adminPasswordInput) savedAdminPassword = adminPasswordInput.value;
-      }
-      
-      if (currentView === 'payments') {
-        const bookingIdInput = document.getElementById('paymentBookingId');
-        const nameInput = document.getElementById('paymentName');
-        const phoneInput = document.getElementById('paymentPhone');
-        const sportInput = document.getElementById('paymentSport');
-        const turfInput = document.getElementById('paymentTurf');
-        const dateInput = document.getElementById('paymentDate');
-        const timeInput = document.getElementById('paymentTime');
-        const playersInput = document.getElementById('paymentPlayers');
-        const amountInput = document.getElementById('paymentAmount');
-        const statusInput = document.getElementById('paymentStatus');
-        if (bookingIdInput) savedPaymentBookingId = bookingIdInput.value;
-        if (nameInput) savedPaymentName = nameInput.value;
-        if (phoneInput) savedPaymentPhone = phoneInput.value;
-        if (sportInput) savedPaymentSport = sportInput.value;
-        if (turfInput) savedPaymentTurf = turfInput.value;
-        if (dateInput) savedPaymentDate = dateInput.value;
-        if (timeInput) savedPaymentTime = timeInput.value;
-        if (playersInput) savedPaymentPlayers = playersInput.value;
-        if (amountInput) savedPaymentAmount = amountInput.value;
-        if (statusInput) savedPaymentStatus = statusInput.value;
-      }
-      
-      if (currentView === 'login') {
-        app.innerHTML = renderLogin();
-        // Restore input values after render
-        const adminIdInput = document.getElementById('adminId');
-        const adminPasswordInput = document.getElementById('adminPassword');
-        if (adminIdInput) adminIdInput.value = savedAdminId;
-        if (adminPasswordInput) adminPasswordInput.value = savedAdminPassword;
-      } else {
-        const bookings = getBookings();
+    async function render() {
+      try {
+        const app = document.getElementById('app');
         
-        const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
-        const totalRevenue = paidBookings.reduce((sum, b) => sum + (b.price || 0), 0);
+        // Don't re-render if user is interacting with payment form
+        if (currentView === 'payments' && isPaymentFormActive) {
+          return; // Skip render while interacting
+        }
         
-        const filteredBookings = bookings.filter(b => {
-          const matchesSearch = 
-            b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            b.phone.includes(searchTerm) ||
-            b.email.toLowerCase().includes(searchTerm.toLowerCase());
-          return matchesSearch;
-        });
-
-        app.innerHTML = renderAdminPanel(totalRevenue, 0, 0, filteredBookings);
+        // Save input values before render
+        let savedAdminId = '';
+        let savedAdminPassword = '';
+        let savedPaymentBookingId = '';
+        let savedPaymentName = '';
+        let savedPaymentPhone = '';
+        let savedPaymentSport = '';
+        let savedPaymentTurf = '';
+        let savedPaymentDate = '';
+        let savedPaymentTime = '';
+        let savedPaymentPlayers = '';
+        let savedPaymentAmount = '';
+        let savedPaymentStatus = '';
         
-        // Restore input values after render
+        if (currentView === 'login') {
+          const adminIdInput = document.getElementById('adminId');
+          const adminPasswordInput = document.getElementById('adminPassword');
+          if (adminIdInput) savedAdminId = adminIdInput.value;
+          if (adminPasswordInput) savedAdminPassword = adminPasswordInput.value;
+        }
+        
         if (currentView === 'payments') {
           const bookingIdInput = document.getElementById('paymentBookingId');
           const nameInput = document.getElementById('paymentName');
@@ -209,53 +158,107 @@
           const playersInput = document.getElementById('paymentPlayers');
           const amountInput = document.getElementById('paymentAmount');
           const statusInput = document.getElementById('paymentStatus');
-          if (bookingIdInput) bookingIdInput.value = savedPaymentBookingId;
-          if (nameInput) nameInput.value = savedPaymentName;
-          if (phoneInput) phoneInput.value = savedPaymentPhone;
-          if (sportInput) sportInput.value = savedPaymentSport;
-          if (turfInput) turfInput.value = savedPaymentTurf;
-          if (dateInput) dateInput.value = savedPaymentDate;
-          if (timeInput) timeInput.value = savedPaymentTime;
-          if (playersInput) playersInput.value = savedPaymentPlayers;
-          if (amountInput) amountInput.value = savedPaymentAmount;
-          if (statusInput) statusInput.value = savedPaymentStatus;
+          if (bookingIdInput) savedPaymentBookingId = bookingIdInput.value;
+          if (nameInput) savedPaymentName = nameInput.value;
+          if (phoneInput) savedPaymentPhone = phoneInput.value;
+          if (sportInput) savedPaymentSport = sportInput.value;
+          if (turfInput) savedPaymentTurf = turfInput.value;
+          if (dateInput) savedPaymentDate = dateInput.value;
+          if (timeInput) savedPaymentTime = timeInput.value;
+          if (playersInput) savedPaymentPlayers = playersInput.value;
+          if (amountInput) savedPaymentAmount = amountInput.value;
+          if (statusInput) savedPaymentStatus = statusInput.value;
+        }
+        
+        if (currentView === 'login') {
+          app.innerHTML = renderLogin();
+          // Restore input values after render
+          const adminIdInput = document.getElementById('adminId');
+          const adminPasswordInput = document.getElementById('adminPassword');
+          if (adminIdInput) adminIdInput.value = savedAdminId;
+          if (adminPasswordInput) adminPasswordInput.value = savedAdminPassword;
+        } else {
+          const bookings = await getBookings();
           
-          // Re-trigger booking selection if a booking is selected
-          if (savedPaymentBookingId) {
-            const select = bookingIdInput;
-            const selectedOption = select.options[select.selectedIndex];
-            if (selectedOption) {
-              const name = selectedOption.getAttribute('data-name');
-              const phone = selectedOption.getAttribute('data-phone');
-              const sport = selectedOption.getAttribute('data-sport');
-              const turf = selectedOption.getAttribute('data-turf');
-              const datetime = selectedOption.getAttribute('data-datetime');
-              const players = selectedOption.getAttribute('data-players');
-              if (nameInput) nameInput.value = name || '';
-              if (phoneInput) phoneInput.value = phone || '';
-              if (sportInput) sportInput.value = sport || '';
-              if (turfInput) turfInput.value = turf || '';
-              if (dateInput) dateInput.value = datetime ? new Date(datetime).toLocaleDateString() : '';
-              if (timeInput) timeInput.value = datetime ? new Date(datetime).toLocaleTimeString() : '';
-              if (playersInput) playersInput.value = players || '';
+          const paidBookings = bookings.filter(b => b.paymentStatus === 'paid');
+          const totalRevenue = paidBookings.reduce((sum, b) => sum + (b.price || 0), 0);
+          
+          const filteredBookings = bookings.filter(b => {
+            const matchesSearch = 
+              b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              b.phone.includes(searchTerm) ||
+              b.email.toLowerCase().includes(searchTerm.toLowerCase());
+            return matchesSearch;
+          });
+
+          app.innerHTML = renderAdminPanel(totalRevenue, 0, 0, filteredBookings);
+          
+          // Restore input values after render
+          if (currentView === 'payments') {
+            const bookingIdInput = document.getElementById('paymentBookingId');
+            const nameInput = document.getElementById('paymentName');
+            const phoneInput = document.getElementById('paymentPhone');
+            const sportInput = document.getElementById('paymentSport');
+            const turfInput = document.getElementById('paymentTurf');
+            const dateInput = document.getElementById('paymentDate');
+            const timeInput = document.getElementById('paymentTime');
+            const playersInput = document.getElementById('paymentPlayers');
+            const amountInput = document.getElementById('paymentAmount');
+            const statusInput = document.getElementById('paymentStatus');
+            if (bookingIdInput) bookingIdInput.value = savedPaymentBookingId;
+            if (nameInput) nameInput.value = savedPaymentName;
+            if (phoneInput) phoneInput.value = savedPaymentPhone;
+            if (sportInput) sportInput.value = savedPaymentSport;
+            if (turfInput) turfInput.value = savedPaymentTurf;
+            if (dateInput) dateInput.value = savedPaymentDate;
+            if (timeInput) timeInput.value = savedPaymentTime;
+            if (playersInput) playersInput.value = savedPaymentPlayers;
+            if (amountInput) amountInput.value = savedPaymentAmount;
+            if (statusInput) statusInput.value = savedPaymentStatus;
+            
+            // Re-trigger booking selection if a booking is selected
+            if (savedPaymentBookingId) {
+              const select = bookingIdInput;
+              const selectedOption = select.options[select.selectedIndex];
+              if (selectedOption) {
+                const name = selectedOption.getAttribute('data-name');
+                const phone = selectedOption.getAttribute('data-phone');
+                const sport = selectedOption.getAttribute('data-sport');
+                const turf = selectedOption.getAttribute('data-turf');
+                const datetime = selectedOption.getAttribute('data-datetime');
+                const players = selectedOption.getAttribute('data-players');
+                if (nameInput) nameInput.value = name || '';
+                if (phoneInput) phoneInput.value = phone || '';
+                if (sportInput) sportInput.value = sport || '';
+                if (turfInput) turfInput.value = turf || '';
+                if (dateInput) dateInput.value = datetime ? new Date(datetime).toLocaleDateString() : '';
+                if (timeInput) timeInput.value = datetime ? new Date(datetime).toLocaleTimeString() : '';
+                if (playersInput) playersInput.value = players || '';
+              }
+            }
+            
+            // Add event listeners to payment form inputs to prevent render
+            if (bookingIdInput) {
+              bookingIdInput.addEventListener('focus', () => { isPaymentFormActive = true; });
+              bookingIdInput.addEventListener('blur', () => { setTimeout(() => { isPaymentFormActive = false; }, 100); });
+              bookingIdInput.addEventListener('change', () => { isPaymentFormActive = true; setTimeout(() => { isPaymentFormActive = false; }, 100); });
+            }
+            if (amountInput) {
+              amountInput.addEventListener('focus', () => { isPaymentFormActive = true; });
+              amountInput.addEventListener('blur', () => { setTimeout(() => { isPaymentFormActive = false; }, 100); });
+            }
+            if (statusInput) {
+              statusInput.addEventListener('focus', () => { isPaymentFormActive = true; });
+              statusInput.addEventListener('blur', () => { setTimeout(() => { isPaymentFormActive = false; }, 100); });
+              statusInput.addEventListener('change', () => { isPaymentFormActive = true; setTimeout(() => { isPaymentFormActive = false; }, 100); });
             }
           }
-          
-          // Add event listeners to payment form inputs to prevent render
-          if (bookingIdInput) {
-            bookingIdInput.addEventListener('focus', () => { isPaymentFormActive = true; });
-            bookingIdInput.addEventListener('blur', () => { setTimeout(() => { isPaymentFormActive = false; }, 100); });
-            bookingIdInput.addEventListener('change', () => { isPaymentFormActive = true; setTimeout(() => { isPaymentFormActive = false; }, 100); });
-          }
-          if (amountInput) {
-            amountInput.addEventListener('focus', () => { isPaymentFormActive = true; });
-            amountInput.addEventListener('blur', () => { setTimeout(() => { isPaymentFormActive = false; }, 100); });
-          }
-          if (statusInput) {
-            statusInput.addEventListener('focus', () => { isPaymentFormActive = true; });
-            statusInput.addEventListener('blur', () => { setTimeout(() => { isPaymentFormActive = false; }, 100); });
-            statusInput.addEventListener('change', () => { isPaymentFormActive = true; setTimeout(() => { isPaymentFormActive = false; }, 100); });
-          }
+        }
+      } catch (error) {
+        console.error('Render error:', error);
+        const app = document.getElementById('app');
+        if (app) {
+          app.innerHTML = '<div style="padding: 20px; color: red;">Error loading admin panel: ' + (error instanceof Error ? error.message : 'Unknown error') + '</div>';
         }
       }
     }
@@ -336,51 +339,63 @@
     }
 
     function renderDashboard(totalRevenue, weeklyRevenue, monthlyRevenue, bookings) {
-      const bookedBookings = bookings.filter(b => b.status === 'booked');
-      const rejectedBookings = bookings.filter(b => b.status === 'rejected');
+      const bookingsArray = Array.isArray(bookings) ? bookings : [];
+      
+      // Calculate revenue by sport for the chart
+      const revenueBySport = {};
+      bookingsArray.forEach(b => {
+        if (b.paymentStatus === 'paid' && b.price) {
+          const sport = b.sport || 'Other';
+          revenueBySport[sport] = (revenueBySport[sport] || 0) + b.price;
+        }
+      });
+      
+      const sports = Object.keys(revenueBySport);
+      const maxRevenue = Math.max(...Object.values(revenueBySport), 1);
       
       return `
         <div class="space-y-6">
-          <div class="flex justify-end">
+          <div class="flex justify-between items-center">
+            <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
             <button onclick="handleDownloadCSV()"
               class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
               <i class="fas fa-download mr-2"></i>Download CSV
             </button>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-white rounded-xl p-6 shadow-lg">
-              <p class="text-sm text-green-600">Total Bookings</p>
-              <p class="text-2xl font-bold text-green-800">${bookings.length}</p>
-            </div>
-            <div class="bg-white rounded-xl p-6 shadow-lg">
-              <p class="text-sm text-blue-600">Booked</p>
-              <p class="text-2xl font-bold text-blue-800">${bookedBookings.length}</p>
-            </div>
-            <div class="bg-white rounded-xl p-6 shadow-lg">
-              <p class="text-sm text-purple-600">Rejected</p>
-              <p class="text-2xl font-bold text-purple-800">${rejectedBookings.length}</p>
-            </div>
-            <div class="bg-white rounded-xl p-6 shadow-lg">
-              <p class="text-sm text-orange-600">Pending</p>
-              <p class="text-2xl font-bold text-orange-800">${bookings.filter(b => b.status === 'pending').length}</p>
-            </div>
+          
+          <div class="bg-white rounded-xl p-8 shadow-lg">
+            <p class="text-sm text-gray-600 mb-2">Total Revenue</p>
+            <p class="text-4xl font-bold text-green-600">₹${totalRevenue.toLocaleString()}</p>
           </div>
           
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-white rounded-xl p-6 shadow-lg">
-              <p class="text-sm text-gray-600">Booking Rate</p>
-              <p class="text-xl font-bold text-blue-600">${bookings.length > 0 ? Math.round((bookedBookings.length / bookings.length) * 100) : 0}%</p>
-            </div>
-            <div class="bg-white rounded-xl p-6 shadow-lg">
-              <p class="text-sm text-gray-600">Total Revenue</p>
-              <p class="text-xl font-bold text-green-600">₹${totalRevenue.toLocaleString()}</p>
+          ${sports.length > 0 ? `
+          <div class="bg-white rounded-xl p-6 shadow-lg">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Revenue by Sport</h3>
+            <div class="space-y-4">
+              ${sports.map(sport => {
+                const revenue = revenueBySport[sport];
+                const percentage = (revenue / maxRevenue) * 100;
+                return `
+                  <div>
+                    <div class="flex justify-between mb-1">
+                      <span class="text-sm font-medium text-gray-700">${sport}</span>
+                      <span class="text-sm font-medium text-gray-700">₹${revenue.toLocaleString()}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-4">
+                      <div class="bg-blue-500 h-4 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
+          ` : ''}
         </div>
       `;
     }
 
     function renderBookings(filteredBookings) {
+      const bookingsArray = Array.isArray(filteredBookings) ? filteredBookings : [];
       return `
         <div class="space-y-4">
           <div class="flex justify-between items-center">
@@ -408,7 +423,7 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
-                  ${filteredBookings.map(b => `
+                  ${bookingsArray.map(b => `
                     <tr>
                       <td class="px-4 py-3 text-sm">${b.name}</td>
                       <td class="px-4 py-3 text-sm">${b.phone}</td>
@@ -440,6 +455,7 @@
     }
 
     function renderPayments(filteredBookings) {
+      const bookingsArray = Array.isArray(filteredBookings) ? filteredBookings : [];
       return `
         <div class="space-y-4">
           <div class="flex justify-between items-center">
@@ -461,7 +477,7 @@
                 <select id="paymentBookingId" required onchange="handlePaymentBookingSelection(event)"
                   class="w-full px-4 py-2 border border-gray-300 rounded-lg">
                   <option value="">Select a booking...</option>
-                  ${filteredBookings.filter(b => b.status === 'booked' && b.paymentStatus !== 'paid').map(b => `
+                  ${bookingsArray.filter(b => b.status === 'booked' && b.paymentStatus !== 'paid').map(b => `
                     <option value="${b.id}" 
                       data-name="${b.name}" 
                       data-phone="${b.phone}" 
@@ -584,37 +600,38 @@
     }
 
     // Event Handlers
-    function handleLogin(e) {
+    async function handleLogin(e) {
       e.preventDefault();
       const id = document.getElementById('adminId').value;
       const password = document.getElementById('adminPassword').value;
       if (adminLogin(id, password)) {
         currentView = 'dashboard';
-        render();
+        await render();
       } else {
         document.getElementById('loginError').classList.remove('hidden');
       }
     }
 
-    function handleLogout() {
+    async function handleLogout() {
       adminLogout();
       currentView = 'login';
-      render();
+      await render();
     }
 
-    function setView(view) {
+    async function setView(view) {
       currentView = view;
-      render();
+      await render();
     }
 
-    function handleSearch(e) {
+    async function handleSearch(e) {
       searchTerm = e.target.value;
-      render();
+      await render();
     }
 
-    function toggleBookingStatus(bookingId, currentStatus) {
+    async function toggleBookingStatus(bookingId, currentStatus) {
+      console.log('toggleBookingStatus called:', bookingId, currentStatus);
       const newStatus = currentStatus === 'booked' ? 'rejected' : 'booked';
-      updateBookingStatus(bookingId, newStatus);
+      await updateBookingStatus(bookingId, newStatus);
     }
 
     function handlePaymentBookingSelection(e) {
@@ -636,40 +653,40 @@
       document.getElementById('paymentPlayers').value = players || '';
     }
 
-    function handleAddPayment(e) {
+    async function handleAddPayment(e) {
       e.preventDefault();
       const bookingId = document.getElementById('paymentBookingId').value;
       const amount = parseFloat(document.getElementById('paymentAmount').value);
       const status = document.getElementById('paymentStatus').value;
       
       if (bookingId && amount) {
-        const data = localStorage.getItem(STORE_KEY);
-        if (!data) return;
-        const parsed = JSON.parse(data);
-        const updated = parsed.bookings.map(b => 
-          b.id === bookingId ? { ...b, price: amount, paymentStatus: status } : b
-        );
-        parsed.bookings = updated;
-        localStorage.setItem(STORE_KEY, JSON.stringify(parsed));
+        const response = await fetch('/api/bookings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: bookingId, price: amount, paymentStatus: status })
+        });
+        const data = await response.json();
         
-        // Clear form
-        document.getElementById('paymentBookingId').value = '';
-        document.getElementById('paymentName').value = '';
-        document.getElementById('paymentPhone').value = '';
-        document.getElementById('paymentSport').value = '';
-        document.getElementById('paymentTurf').value = '';
-        document.getElementById('paymentDate').value = '';
-        document.getElementById('paymentTime').value = '';
-        document.getElementById('paymentPlayers').value = '';
-        document.getElementById('paymentAmount').value = '';
-        document.getElementById('paymentStatus').value = 'paid';
-        
-        render();
+        if (data.success) {
+          // Clear form
+          document.getElementById('paymentBookingId').value = '';
+          document.getElementById('paymentName').value = '';
+          document.getElementById('paymentPhone').value = '';
+          document.getElementById('paymentSport').value = '';
+          document.getElementById('paymentTurf').value = '';
+          document.getElementById('paymentDate').value = '';
+          document.getElementById('paymentTime').value = '';
+          document.getElementById('paymentPlayers').value = '';
+          document.getElementById('paymentAmount').value = '';
+          document.getElementById('paymentStatus').value = 'paid';
+          
+          render();
+        }
       }
     }
 
-    function handleDownloadCSV() {
-      const bookings = getBookings();
+    async function handleDownloadCSV() {
+      const bookings = await getBookings();
       const filtered = bookings.filter(b => {
         const matchesSearch = 
           b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -683,16 +700,11 @@
     }
 
     // Initialize
-    render();
+    (async () => {
+      await render();
+    })();
 
-    // Auto-refresh when localStorage changes (from customer app)
-    window.addEventListener('storage', (e) => {
-      if (e.key === STORE_KEY && currentView !== 'login' && currentView !== 'payments') {
-        render();
-      }
-    });
-
-    // Also poll for changes every 2 seconds as backup (but not when in login forms or payments)
+    // Poll for changes every 2 seconds to sync with database
     setInterval(() => {
       if (currentView !== 'login' && currentView !== 'payments') {
         render();

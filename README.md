@@ -1,65 +1,101 @@
-# Playbook Pro
+# Sports Pitch Booking System
 
-Sports turf booking app built with React, TanStack Start, Vite, and Nitro (Vercel-ready).
+A sports turf booking system with separate customer and admin interfaces, built as a monorepo with independent deployments.
 
-## Repository layout
+## Repository Structure
 
-| Path | Purpose |
-|------|---------|
-| `public/` | Static assets (PWA, icons, etc.) |
-| `src/` | Application source (`routes/`, `components/`, `hooks/`, `lib/`, …) |
-| `scripts/` | Optional tooling (e.g. `process:logo` for transparent PNG) |
-| `package.json` / `package-lock.json` | Dependencies (use **npm**) |
-| `vite.config.ts` | Vite + TanStack Start + Nitro |
-| `tsconfig.json` | TypeScript |
-| `vercel.json` | Vercel framework hint |
+This is a monorepo containing three independent projects:
 
-**Note:** `src/routeTree.gen.ts` is listed in `.gitignore` as `*.gen.ts`. It is **regenerated** when you run `npm run dev` or `npm run build`. After a fresh clone, run one of those once before relying on IDE typecheck.
+| Path | Purpose | Port | Deployment URL |
+|------|---------|------|---------------|
+| `frontend/` | Customer booking site (React + Vite) | 3000 | Frontend Vercel URL |
+| `admin/` | Admin panel (HTML/JS) | 3001 | Admin Vercel URL |
+| `shared/` | Shared API backend (Express) | 3002 | API Vercel URL |
+
+## Project Details
+
+### Frontend (Customer Site)
+- **Tech Stack**: React, Vite, Tailwind CSS
+- **Purpose**: Customer-facing booking interface
+- **Development**: `cd frontend && npm run dev`
+- **Build**: `cd frontend && npm run build`
+
+### Admin Panel
+- **Tech Stack**: HTML, JavaScript, Tailwind CSS
+- **Purpose**: Admin dashboard for managing bookings
+- **Development**: `cd admin && npm run dev`
+- **Build**: Static HTML (no build step needed)
+
+### Shared API
+- **Tech Stack**: Express.js, Node.js
+- **Purpose**: Shared backend API for both frontend and admin
+- **Development**: `cd shared && npm run dev`
+- **Database**: JSON file storage in `shared/data/bookings.json`
 
 ## Development
 
+To run all projects locally:
+
 ```bash
+# Terminal 1 - Frontend
+cd frontend
+npm install
+npm run dev
+
+# Terminal 2 - Admin
+cd admin
+npm install
+npm run dev
+
+# Terminal 3 - Shared API
+cd shared
 npm install
 npm run dev
 ```
 
-Open the URL shown in the terminal (often `http://localhost:3000`).
+## Deployment to Vercel
 
-## Production build
+Each project should be deployed separately on Vercel:
 
-```bash
-npm install
-npm run build
-```
+### 1. Deploy Frontend
+1. Go to Vercel → New Project
+2. Import GitHub repository
+3. Set **Root Directory** to `frontend`
+4. Framework preset: Vite
+5. Deploy
 
-On Windows you may see a harmless Nitro **symlink** warning at the end; Vercel builds on Linux and does not hit this.
+### 2. Deploy Admin
+1. Go to Vercel → New Project
+2. Import GitHub repository
+3. Set **Root Directory** to `admin`
+4. Framework preset: Other
+5. Deploy
 
-## Deploy to Vercel
+### 3. Deploy Shared API
+1. Go to Vercel → New Project
+2. Import GitHub repository
+3. Set **Root Directory** to `shared`
+4. Framework preset: Other
+5. Deploy
 
-1. Push the repository to GitHub (see commands below).
-2. In [Vercel](https://vercel.com/new), import the GitHub repo.
-3. Use default **Root directory** (repository root).
-4. Vercel should detect **TanStack Start** (`vercel.json` sets `framework`).
-5. Install: `npm install` · Build: `npm run build` (defaults match `vercel.json`).
-6. Add any required **`VITE_*`** (or other) env vars in the Vercel project settings.
-7. Deploy. Redeploy anytime with **Deployments → … → Redeploy** or by pushing to the connected branch.
+## API Endpoints
 
-## Optional: transparent logo PNG
+The shared API provides the following endpoints:
 
-If you replace `src/assets/logo-brand.png` and need the background removed again:
+- `GET /api/bookings` - Get all bookings
+- `POST /api/bookings` - Create new booking
+- `PUT /api/bookings` - Update booking status
+- `DELETE /api/bookings/:id` - Delete booking
+- `GET /api/time-slots/check?datetime=...` - Check if time slot is locked
+- `POST /api/time-slots/lock` - Lock a time slot
+- `DELETE /api/time-slots/unlock` - Unlock a time slot
 
-```bash
-npm run process:logo
-```
+## GitHub Setup
 
-(Uses `sharp` in devDependencies.)
-
-## GitHub: first-time upload
-
-From the project root (this folder):
+From the project root:
 
 ```powershell
-cd "c:\Users\Nathisooriya\Downloads\playbook-pro-main (4)"
+cd "c:\Users\Nathisooriya\Downloads\sports-pitch-main (5)\sports-pitch-main"
 
 git init
 git branch -M main
@@ -67,27 +103,12 @@ git branch -M main
 git add .
 git status
 
-git commit -m "Initial commit: Playbook Pro TanStack Start app"
+git commit -m "Initial commit: Sports pitch booking monorepo"
 
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+git remote add origin https://github.com/Nathisooriya2005/nnnn.git
 git push -u origin main
 ```
 
-Replace `YOUR_USERNAME` and `YOUR_REPO` with your GitHub details.
+## Environment Configuration
 
-## GitHub: later changes
-
-```powershell
-cd "c:\Users\Nathisooriya\Downloads\playbook-pro-main (4)"
-
-git add .
-git status
-git commit -m "Describe your change in one short sentence."
-git push origin main
-```
-
-## Vercel: redeploy after a push
-
-If the project is already connected to GitHub, **`git push`** to the production branch triggers a new deployment automatically.
-
-To redeploy **without** a new commit: Vercel dashboard → your project → **Deployments** → open the latest deployment → **⋯** → **Redeploy**.
+After deployment, update the API URL in both frontend and admin projects to point to the deployed shared API URL.

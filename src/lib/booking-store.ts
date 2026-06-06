@@ -210,8 +210,15 @@ export function unlockTimeSlot(datetime: string) {
   emit();
 }
 
-export function isTimeSlotLocked(datetime: string): boolean {
-  return state.lockedTimeSlots.includes(datetime);
+export async function isTimeSlotLocked(datetime: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/bookings');
+    const data = await response.json();
+    return data.lockedTimeSlots?.includes(datetime) || false;
+  } catch (error) {
+    console.error('Error checking locked time slot:', error);
+    return false;
+  }
 }
 
 // Admin auth (demo only)
